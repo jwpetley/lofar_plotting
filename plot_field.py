@@ -106,7 +106,7 @@ def input2strlist_nomapfile(invar):
         raise TypeError('input2strlist: Type '+str(type(invar))+' unknown!')
     return str_list
 
-def my_lotss_catalogue( RATar, DECTar,  Radius=1.5, bright_limit_Jy=5., outfile='' ):
+def my_lotss_catalogue( RATar, DECTar,  Radius=1.5, bright_limit_Jy=5., faint_limit_Jy = 0.0, outfile='' ):
 
     """
     Download the LoTSS skymodel for the target field
@@ -166,6 +166,10 @@ def my_lotss_catalogue( RATar, DECTar,  Radius=1.5, bright_limit_Jy=5., outfile=
             keep_cols = keep_cols + ['LGZ_Size', 'LGZ_Width', 'LGZ_PA']
 
         tb_final = tb_sorted[keep_cols]
+
+        tb_final = tb_final[tb_final['Total_flux'] >= faint_limit_Jy*1e3]
+
+        tb_final = tb_final[tb_final['Total_flux'] <= bright_limit_Jy*1e3]
 
         tb_final.write( outfile, format='csv' )
 
@@ -262,7 +266,7 @@ def find_close_objs(lo, lbcs, tolerance=5.):
     lbcs_coords = SkyCoord( lbcs['RA'], lbcs['DEC'], frame='icrs', unit='deg' )
 
     ## search radius 
-    search_rad = 5. / 60. / 60. * u.deg
+    search_rad = tolerance / 60. / 60. * u.deg
 
     ## loop through the lbcs coordinates -- this will be much faster than looping through lotss
     lotss_idx = []
@@ -443,7 +447,7 @@ def smallest_distance(RA, DEC, lbcs_catalogue):
     return ids, distances[ids]
     
     
-def make_plot(RA, DEC,  lotss_catalogue, lbcs_catalogue, targRA=None, 
+def make_plot(RA, DEC,  lotss_catalogue, extreme_catalogue, lbcs_catalogue, targRA=None, 
           targDEC=None, nchan = 16, av_time = 1):
     import matplotlib.pyplot as plt
     from matplotlib.patches import Circle
@@ -481,6 +485,19 @@ def make_plot(RA, DEC,  lotss_catalogue, lbcs_catalogue, targRA=None,
     if os.path.exists(lotss_catalogue):
         ax.scatter(lotss['RA'], lotss['DEC'], transform=ax.get_transform('fk5'), 
             s = lotss['Total_flux'] * scaling, label = "Potential Targets")
+        
+    if len(extreme_catalogue) > 0:
+        for source in extreme_catalogue:
+            vector_orig = [source['RA'] - RA, source['DEC'] - DEC]
+            norm = np.sqrt(vector_orig[0]**2 + vector_orig[1]**2)
+            vector = [vector_orig[0]/norm, vector_orig[1]/norm]
+            alt = [vector[0] -RA, vector[1] - DEC]
+            print(vector, alt)
+            ax.arrow(RA+2*vector[0], DEC+2*vector[1], 0.5*vector[0], 0.5*vector[1], transform=ax.get_transform('fk5'), 
+                width = 0.01, head_width = 0.05, head_length = 0.05, length_includes_head = True) 
+            ax.text(RA+2.5*vector[0], DEC+2.5*vector[1], 
+                    s = "%.2f"%(source['Total_flux']/1000) + " Jy - %.2f degrees"%norm, 
+                    transform=ax.get_transform('fk5'))
 
     ax.scatter(lbcs['RA'], lbcs['DEC'], transform=ax.get_transform('fk5'), s = 60, label = "LBCS Sources")
 
@@ -508,6 +525,25 @@ def make_plot(RA, DEC,  lotss_catalogue, lbcs_catalogue, targRA=None,
     plt.legend(fontsize = 'x-large')
 
     plt.savefig("output.png")
+
+def convert_vlass_fits(fitsfile):
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import LogNorm
+    from astropy.visualization import PercentileInterval, imshow_norm
+    from astropy.wcs import WCS
+    header = fits.open(fitsfile)[0].header
+    wcs = WCS(header)
+
+    image_data = fits.getdata(fitsfile)
+
+    # Shape is (1,1, 3722, 3722). Plot the first image
+    interval = PercentileInterval(99.9)
+    process_data = interval(image_data)
+    plt.subplot(projection = wcs, slices=('x','y',0,0))
+    imshow_norm(process_data, cmap='gray')
+
+    
+    plt.savefig(fitsfile[:-5] + ".png")
 
 
 def plugin_main( RA, DEC, **kwargs ):
@@ -544,8 +580,12 @@ def plugin_main( RA, DEC, **kwargs ):
     lbcs_catalogue = my_lbcs_catalogue( RATar, DECTar, Radius=lbcs_radius, outfile=lbcs_catalogue )
     ## look for or download LoTSS
     print("Attempting to find or download LoTSS catalogue.")
-    lotss_catalogue = my_lotss_catalogue( RATar, DECTar,Radius=lotss_radius, bright_limit_Jy=bright_limit_Jy, outfile=lotss_catalogue )
-
+    lotss_catalogue = my_lotss_catalogue( RATar, DECTar,Radius=lotss_radius, bright_limit_Jy=bright_limit_Jy, faint_limit_Jy = 0.0,
+                                         outfile=lotss_catalogue )
+    
+    print("Finding bright sources outside field")
+    extreme_catalogue = my_lotss_catalogue( RATar, DECTar,Radius=3.0, bright_limit_Jy=1000., faint_limit_Jy = 10.0, outfile = "extreme_catalogue.csv" )
+    extreme_catalogue = remove_multiples_position(extreme_catalogue)
     ## if lbcs exists, and either lotss exists or continue_without_lotss = True, continue
     ## else provide an error message and stop
     if len(lbcs_catalogue) == 0:
@@ -554,6 +594,20 @@ def plugin_main( RA, DEC, **kwargs ):
     if len(lotss_catalogue) == 0 and not fail_lotss_ok:
         logging.error('LoTSS coverage does not exist, and contine_without_lotss is set to False.')
         return 
+    
+    from vlass_search import search_vlass
+    ## Get cutouts of all LBCS sources
+    print("Getting cutouts of LBCS sources")
+    for i, source in enumerate(lbcs_catalogue):
+        ra, dec = source['RA'], source['DEC']
+        c = SkyCoord(ra, dec, unit = (u.deg, u.deg))
+        outfile = "%s_vlass.fits"%source['Observation']
+        search_vlass(c, crop = True, crop_scale = 256)
+        os.system("mv vlass_post**.fits  %s"%outfile)
+        convert_vlass_fits(outfile)
+
+
+        
 
     ## if the LoTSS catalogue is empty, write out the delay cals only
     if len(lotss_catalogue) == 0:
@@ -632,7 +686,7 @@ def plugin_main( RA, DEC, **kwargs ):
             sources_to_image.write( lotss_result_file, format='csv' )
 
     print("Assumed averaging - nchannels: %s; time averging: %s"%(nchan, av_time))
-    make_plot(RATar, DECTar,  lotss_result_file, lbcs_catalogue, targRA, targDEC,nchan = nchan, av_time = av_time)
+    make_plot(RATar, DECTar,  lotss_result_file, extreme_catalogue, lbcs_catalogue, targRA, targDEC,nchan = nchan, av_time = av_time)
     return
 
 
