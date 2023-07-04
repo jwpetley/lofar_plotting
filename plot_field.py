@@ -565,6 +565,7 @@ def plugin_main( RA, DEC, **kwargs ):
     fail_lotss_ok = kwargs['continue_no_lotss'].lower().capitalize()
     nchan = kwargs['nchan']
     av_time = kwargs['av_time']
+    vlass = kwargs['vlass']
     #mslist = DataMap.load(mapfile_in)
     #MSname = mslist[0].file
     # For testing
@@ -595,16 +596,20 @@ def plugin_main( RA, DEC, **kwargs ):
         logging.error('LoTSS coverage does not exist, and contine_without_lotss is set to False.')
         return 
     
-    from vlass_search import search_vlass
-    ## Get cutouts of all LBCS sources
-    print("Getting cutouts of LBCS sources")
-    for i, source in enumerate(lbcs_catalogue):
-        ra, dec = source['RA'], source['DEC']
-        c = SkyCoord(ra, dec, unit = (u.deg, u.deg))
-        outfile = "%s_vlass.fits"%source['Observation']
-        search_vlass(c, crop = True, crop_scale = 256)
-        os.system("mv vlass_post**.fits  %s"%outfile)
-        convert_vlass_fits(outfile)
+    if vlass:
+        from vlass_search import search_vlass
+        ## Get cutouts of all LBCS sources
+        print("Getting cutouts of LBCS sources")
+        for i, source in enumerate(lbcs_catalogue):
+            ra, dec = source['RA'], source['DEC']
+            c = SkyCoord(ra, dec, unit = (u.deg, u.deg))
+            outfile = "%s_vlass.fits"%source['Observation']
+            try:
+                search_vlass(c, crop = True, crop_scale = 256)
+                os.system("mv vlass_post**.fits  %s"%outfile)
+                convert_vlass_fits(outfile)
+            except:
+                pass
 
 
         
@@ -712,6 +717,7 @@ if __name__ == "__main__":
     parser.add_argument( '--av_time', dest='av_time', type=float, help='Time averaging', default = 1. )
 
     parser.add_argument( '--MS', type=str, dest='MS', help='Measurement Set' )
+    parser.add_argument( '--vlass', dest='vlass', action='store_true', help='Get vlass cutouts', default = False)
 
 
 
@@ -735,7 +741,7 @@ if __name__ == "__main__":
            lbcs_catalogue=args.lbcs_catalogue, lotss_result_file=args.lotss_result_file, 
            delay_cals_file=args.delay_cals_file, match_tolerance=args.match_tolerance, 
            image_limit_Jy=args.image_limit_Jy, continue_no_lotss = str(args.continue_no_lotss),
-            nchan = args.nchan,  av_time = args.av_time)
+            nchan = args.nchan,  av_time = args.av_time, vlass=args.vlass)
 
 
 

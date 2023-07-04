@@ -1,1 +1,6 @@
 *.log
+*.fits
+*.png
+*.csv
+*.MS
+*.h5
