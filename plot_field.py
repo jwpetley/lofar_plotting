@@ -500,7 +500,7 @@ def make_plot(RA, DEC,  lotss_catalogue, extreme_catalogue, lbcs_catalogue, targ
                     transform=ax.get_transform('fk5'))
 
     ax.scatter(lbcs['RA'], lbcs['DEC'], transform=ax.get_transform('fk5'), s = 60, label = "LBCS Sources")
-
+    
 
     c = Circle((RA, DEC), 1.5, edgecolor='yellow', facecolor='none',
            transform=ax.get_transform('fk5'))
@@ -521,7 +521,9 @@ def make_plot(RA, DEC,  lotss_catalogue, extreme_catalogue, lbcs_catalogue, targ
 
         ax.plot([targRA, closest_calib['RA']], [targDEC, closest_calib['DEC']], 
                  linestyle = '--', color = 'black',  linewidth = 2, transform=ax.get_transform('fk5'), label = "Distance = %.2f degrees"%dist)
-              
+    
+    for i in range(len(lbcs)):
+        ax.text(lbcs[i]['RA'], lbcs[i]['DEC'], "%s."%(i+1),  transform=ax.get_transform('fk5'))
     plt.legend(fontsize = 'x-large')
 
     plt.savefig("output.png")
@@ -653,6 +655,7 @@ def plugin_main( RA, DEC, **kwargs ):
         else:
         # add radius to the catalogue
             #RATar, DECTar = grab_coo_MS(input2strlist_nomapfile(MSname)[0])
+            result = lbcs_catalogue
             ptg_coords = SkyCoord( RATar, DECTar, frame='icrs', unit='deg' )
 
             src_coords = SkyCoord( result['RA'], result['DEC'], frame='icrs', unit='deg' )
@@ -662,6 +665,8 @@ def plugin_main( RA, DEC, **kwargs ):
 
             ## order by radius from the phase centre
             result.sort( 'Radius' )
+
+            result.rename_column('Observation','Source_id')
 
             ## Write catalogues
             ## 1 - delay calibrators -- from lbcs_catalogue
