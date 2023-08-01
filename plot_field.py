@@ -274,24 +274,24 @@ def find_close_objs(lo, lbcs, tolerance=5.):
     for xx in range(len(lbcs)):
         seps = lbcs_coords[xx].separation(lotss_coords)
         match_idx = np.where( seps < search_rad )[0]
-    if len( match_idx ) == 0:
-            # there's no match, move on to the next source
-            m_idx = [-1]
-            pass
-    else:
-        if len( match_idx ) == 1:
-                ## there's only one match
-                m_idx = match_idx[0]
-                lbcs_idx.append(xx)
-                lotss_idx.append(m_idx)
-        if len( match_idx ) > 1:
-                ## there's more than one match, pick the brightest
-                tmp = lo[match_idx]
-                m_idx = np.where( tmp['Total_flux'] == np.max( tmp['Total_flux'] ) )[0]
-                if not isinstance(m_idx,int):
-                    m_idx = m_idx[0]
-                lbcs_idx.append(xx)
-                lotss_idx.append(m_idx) 
+        if len( match_idx ) == 0:
+                # there's no match, move on to the next source
+                m_idx = [-1]
+                pass
+        else:
+            if len( match_idx ) == 1:
+                    ## there's only one match
+                    m_idx = match_idx[0]
+                    lbcs_idx.append(xx)
+                    lotss_idx.append(m_idx)
+            if len( match_idx ) > 1:
+                    ## there's more than one match, pick the brightest
+                    tmp = lo[match_idx]
+                    m_idx = np.where( tmp['Total_flux'] == np.max( tmp['Total_flux'] ) )[0]
+                    if not isinstance(m_idx,int):
+                        m_idx = m_idx[0]
+                    lbcs_idx.append(xx)
+                    lotss_idx.append(m_idx) 
     lbcs_matches = lbcs[lbcs_idx]
     lotss_matches = lo[lotss_idx]
 
@@ -523,7 +523,7 @@ def make_plot(RA, DEC,  lotss_catalogue, extreme_catalogue, lbcs_catalogue, targ
                  linestyle = '--', color = 'black',  linewidth = 2, transform=ax.get_transform('fk5'), label = "Distance = %.2f degrees"%dist)
     
     for i in range(len(lbcs)):
-        ax.text(lbcs[i]['RA'], lbcs[i]['DEC'], "%s."%(i+1),  transform=ax.get_transform('fk5'))
+        ax.text(lbcs[i]['RA']-0.05, lbcs[i]['DEC'], "%.2f Jy"%(lbcs[i]['Total_flux']/1000),  transform=ax.get_transform('fk5'))
     plt.legend(fontsize = 'x-large')
 
     plt.savefig("output.png")
@@ -587,7 +587,7 @@ def plugin_main( RA, DEC, **kwargs ):
                                          outfile=lotss_catalogue )
     
     print("Finding bright sources outside field")
-    extreme_catalogue = my_lotss_catalogue( RATar, DECTar,Radius=3.0, bright_limit_Jy=1000., faint_limit_Jy = 10.0, outfile = "extreme_catalogue.csv" )
+    extreme_catalogue = my_lotss_catalogue( RATar, DECTar,Radius=10.0, bright_limit_Jy=1000., faint_limit_Jy = 10.0, outfile = "extreme_catalogue.csv" )
     extreme_catalogue = remove_multiples_position(extreme_catalogue)
     ## if lbcs exists, and either lotss exists or continue_without_lotss = True, continue
     ## else provide an error message and stop
@@ -598,20 +598,7 @@ def plugin_main( RA, DEC, **kwargs ):
         logging.error('LoTSS coverage does not exist, and contine_without_lotss is set to False.')
         return 
     
-    if vlass:
-        from vlass_search import search_vlass
-        ## Get cutouts of all LBCS sources
-        print("Getting cutouts of LBCS sources")
-        for i, source in enumerate(lbcs_catalogue):
-            ra, dec = source['RA'], source['DEC']
-            c = SkyCoord(ra, dec, unit = (u.deg, u.deg))
-            outfile = "%s_vlass.fits"%source['Observation']
-            try:
-                search_vlass(c, crop = True, crop_scale = 256)
-                os.system("mv vlass_post**.fits  %s"%outfile)
-                convert_vlass_fits(outfile)
-            except:
-                pass
+    
 
 
         
@@ -655,7 +642,7 @@ def plugin_main( RA, DEC, **kwargs ):
         else:
         # add radius to the catalogue
             #RATar, DECTar = grab_coo_MS(input2strlist_nomapfile(MSname)[0])
-            result = lbcs_catalogue
+            #result = lbcs_catalogue
             ptg_coords = SkyCoord( RATar, DECTar, frame='icrs', unit='deg' )
 
             src_coords = SkyCoord( result['RA'], result['DEC'], frame='icrs', unit='deg' )
@@ -666,7 +653,7 @@ def plugin_main( RA, DEC, **kwargs ):
             ## order by radius from the phase centre
             result.sort( 'Radius' )
 
-            result.rename_column('Observation','Source_id')
+            #result.rename_column('Observation','Source_id')
 
             ## Write catalogues
             ## 1 - delay calibrators -- from lbcs_catalogue
@@ -695,8 +682,23 @@ def plugin_main( RA, DEC, **kwargs ):
             print( "There are "+str(nsrcs)+" sources above "+str(image_limit_Jy)+" mJy within "+str(im_radius)+" degrees of the phase centre.")
             sources_to_image.write( lotss_result_file, format='csv' )
 
-    print("Assumed averaging - nchannels: %s; time averging: %s"%(nchan, av_time))
-    make_plot(RATar, DECTar,  lotss_result_file, extreme_catalogue, lbcs_catalogue, targRA, targDEC,nchan = nchan, av_time = av_time)
+    print("Assumed averaging - nchannels: %s; time averaging: %s"%(nchan, av_time))
+    make_plot(RATar, DECTar,  lotss_result_file, extreme_catalogue, result, targRA, targDEC,nchan = nchan, av_time = av_time)
+    
+    if vlass:
+        from vlass_search import search_vlass
+        ## Get cutouts of all LBCS sources
+        print("Getting cutouts of LBCS sources")
+        for i, source in enumerate(result):
+            ra, dec = source['RA'], source['DEC']
+            c = SkyCoord(ra, dec, unit = (u.deg, u.deg))
+            outfile = "%s_vlass.fits"%source['Observation']
+            try:
+                search_vlass(c, crop = True, crop_scale = 256)
+                os.system("mv vlass_post**.fits  %s"%outfile)
+                convert_vlass_fits(outfile)
+            except:
+                pass
     return
 
 
@@ -755,15 +757,15 @@ if __name__ == "__main__":
 
 ### TO DO LIST
 
-# Change size of targets based on flux - Add argument for setting minimum flux - 
-# Look for bright sources within 10 degrees above a few Jy - use the bright_limit_Jy argument 
+# Change size of targets based on flux - Add argument for setting minimum flux - DONE
+# Look for bright sources within 10 degrees above a few Jy - use the bright_limit_Jy argument - DONE
 # Add colour for quality of LBCS sources - Use fit or the compactness codes - Maybe not 
-# Number the calibrators based on brightness 
+# Number the calibrators based on brightness - DONE
 
 
-# Label shading of the smearing
-# Print some statistics about the sources - Number etc. 
-# How many sources above the flux limit
-# Target to phase center distance
-# Make all the grey's lighter
-# Print what averaging was assumed - Also add as an optional argument - Both channels and time
+# Label shading of the smearing - DONE
+# Print some statistics about the sources - Number etc. - DONE
+# How many sources above the flux limit - DONE
+# Target to phase center distance - DONE
+# Make all the grey's lighter - DONE
+# Print what averaging was assumed - Also add as an optional argument - Both channels and time - DONE
