@@ -617,7 +617,7 @@ def plugin_main( RA, DEC, **kwargs ):
         lbcs_catalogue.add_column( seps )
 
         ## rename the source_id column
-        lbcs_catalogue.rename_column('Observation','Source_id')
+        #lbcs_catalogue.rename_column('Observation','Source_id')
 
         ## add in some dummy data
         Total_flux = Column( np.ones(len(lbcs_catalogue))*1e3, name='Total_flux', unit='mJy' )
@@ -633,6 +633,8 @@ def plugin_main( RA, DEC, **kwargs ):
 
         ## write the catalogue
         lbcs_catalogue.write(delay_cals_file, format='csv')
+
+        result = lbcs_catalogue
     else:
         ## else continue 
         result = find_close_objs( lotss_catalogue, lbcs_catalogue, tolerance=match_tolerance )
@@ -678,12 +680,14 @@ def plugin_main( RA, DEC, **kwargs ):
             sources_to_image = flux_cut_sources[good_idx]
 
             nsrcs = float( len( sources_to_image ) )
-            print( "There are "+str(len(lbcs_catalogue))+" delay calibrators within 2 degrees of the pointing centre")
-            print( "There are "+str(nsrcs)+" sources above "+str(image_limit_Jy)+" mJy within "+str(im_radius)+" degrees of the phase centre.")
+            print( "There are "+str(len(lbcs_catalogue))+" delay calibrators within " + str(im_radius) + " degrees of the pointing centre")
+            print( "There are "+str(nsrcs)+" sources above "+str(image_limit_Jy*1000)+" mJy within "+str(im_radius)+" degrees of the phase centre.")
             sources_to_image.write( lotss_result_file, format='csv' )
 
     print("Assumed averaging - nchannels: %s; time averaging: %s"%(nchan, av_time))
     make_plot(RATar, DECTar,  lotss_result_file, extreme_catalogue, result, targRA, targDEC,nchan = nchan, av_time = av_time)
+
+    
     
     if vlass:
         from vlass_search import search_vlass
@@ -724,9 +728,7 @@ if __name__ == "__main__":
     parser.add_argument( '--av_time', dest='av_time', type=float, help='Time averaging', default = 1. )
 
     parser.add_argument( '--MS', type=str, dest='MS', help='Measurement Set' )
-    parser.add_argument( '--vlass', dest='vlass', action='store_true', help='Get vlass cutouts', default = False)
-
-
+    parser.add_argument( '--vlass', dest='vlass', action='store_true', help='Get VLASS cutouts of delay_calibraors.csv sources', default = False)
 
     parser.add_argument( '--RA', type=float, dest = 'RA', help='Ptg RA in deg' )
     parser.add_argument( '--DEC', type=float, dest = 'DEC', help='Ptg DEC in deg' )
