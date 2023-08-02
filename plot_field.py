@@ -13,6 +13,7 @@ from astropy import units as u
 from astropy.io import fits
 from astropy.wcs import WCS
 from astropy.table import Table
+from time import sleep
 
 
 def sum_digits(n):
